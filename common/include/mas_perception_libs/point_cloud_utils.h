@@ -43,10 +43,17 @@ struct CloudFilterParams
     float mPassThroughLimitMaxX = 0.0f;
     float mPassThroughLimitMinY = 0.0f;
     float mPassThroughLimitMaxY = 0.0f;
+    float mPassThroughLimitMinZ = 0.0f;
+    float mPassThroughLimitMaxZ = 0.0f;
     /* VoxelGrid filter parameters for down-sampling the cloud, also limit the cloud along the z axis */
     float mVoxelLimitMinZ = 0.0f;
     float mVoxelLimitMaxZ = 0.0f;
     float mVoxelLeafSize = 0.0f;
+    /* Enable or disable passthrough filter filter */
+    bool isPassthroughFilterEnabled = false;
+    bool isPassthroughFilterXEnabled = false;
+    bool isPassthroughFilterYEnabled = false;
+    bool isPassthroughFilterZEnabled = false;
 };
 
 /*!
@@ -68,8 +75,14 @@ public:
     filterCloud(const PointCloud::ConstPtr &pCloudPtr);
 
 private:
+    bool isPassthroughFilterEnabled_;
+    bool isPassthroughFilterXEnabled_;
+    bool isPassthroughFilterYEnabled_;
+    bool isPassthroughFilterZEnabled_;
+
     pcl::PassThrough<PointT> mPassThroughFilterX;
     pcl::PassThrough<PointT> mPassThroughFilterY;
+    pcl::PassThrough<PointT> mPassThroughFilterZ;
     pcl::VoxelGrid<PointT> mVoxelGridFilter;
 };
 
