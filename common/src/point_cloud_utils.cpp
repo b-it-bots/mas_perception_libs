@@ -62,11 +62,19 @@ namespace mas_perception_libs
     CloudFilter::setParams(const mas_perception_libs::CloudFilterParams &pParams)
     {
         /* pass-through params */
-        mPassThroughFilterX.setFilterFieldName("x");
-        mPassThroughFilterX.setFilterLimits(pParams.mPassThroughLimitMinX, pParams.mPassThroughLimitMaxX);
-        mPassThroughFilterY.setFilterFieldName("y");
-        mPassThroughFilterY.setFilterLimits(pParams.mPassThroughLimitMinY, pParams.mPassThroughLimitMaxY);
-
+        isPassthroughFilterEnabled_ = pParams.isPassthroughFilterEnabled;
+        isPassthroughFilterXEnabled_ = pParams.isPassthroughFilterXEnabled;
+        isPassthroughFilterYEnabled_ = pParams.isPassthroughFilterYEnabled;
+        isPassthroughFilterZEnabled_ = pParams.isPassthroughFilterZEnabled;
+        if (isPassthroughFilterEnabled_)
+        {
+            mPassThroughFilterX.setFilterFieldName("x");
+            mPassThroughFilterX.setFilterLimits(pParams.mPassThroughLimitMinX, pParams.mPassThroughLimitMaxX);
+            mPassThroughFilterY.setFilterFieldName("y");
+            mPassThroughFilterY.setFilterLimits(pParams.mPassThroughLimitMinY, pParams.mPassThroughLimitMaxY);
+            mPassThroughFilterZ.setFilterFieldName("z");
+            mPassThroughFilterZ.setFilterLimits(pParams.mPassThroughLimitMinZ, pParams.mPassThroughLimitMaxZ);
+        }
         /* filter z-axis using voxel filter instead of making another member */
         mVoxelGridFilter.setFilterFieldName("z");
         mVoxelGridFilter.setFilterLimits(pParams.mVoxelLimitMinZ, pParams.mVoxelLimitMaxZ);
@@ -80,14 +88,67 @@ namespace mas_perception_libs
     {
         PointCloud::Ptr filteredCloudPtr = boost::make_shared<PointCloud>();
 
-        mPassThroughFilterX.setInputCloud(pCloudPtr);
-        mPassThroughFilterX.filter(*filteredCloudPtr);
+         if (isPassthroughFilterEnabled_)
+        {
+            if (isPassthroughFilterXEnabled_ && isPassthroughFilterYEnabled_ && isPassthroughFilterZEnabled_)
+            {
+                mPassThroughFilterX.setInputCloud(pCloudPtr);
+                mPassThroughFilterX.filter(*filteredCloudPtr);
 
-        mPassThroughFilterY.setInputCloud(filteredCloudPtr);
-        mPassThroughFilterY.filter(*filteredCloudPtr);
+                mPassThroughFilterY.setInputCloud(filteredCloudPtr);
+                mPassThroughFilterY.filter(*filteredCloudPtr);
 
-        mVoxelGridFilter.setInputCloud(filteredCloudPtr);
-        mVoxelGridFilter.filter(*filteredCloudPtr);
+                mPassThroughFilterZ.setInputCloud(filteredCloudPtr);
+                mPassThroughFilterZ.filter(*filteredCloudPtr);
+            }
+            else if (isPassthroughFilterXEnabled_ && isPassthroughFilterYEnabled_)
+            {
+                mPassThroughFilterX.setInputCloud(pCloudPtr);
+                mPassThroughFilterX.filter(*filteredCloudPtr);
+
+                mPassThroughFilterY.setInputCloud(filteredCloudPtr);
+                mPassThroughFilterY.filter(*filteredCloudPtr);
+            }
+            else if (isPassthroughFilterYEnabled_ && isPassthroughFilterZEnabled_)
+            {
+                mPassThroughFilterY.setInputCloud(pCloudPtr);
+                mPassThroughFilterY.filter(*filteredCloudPtr);
+
+                mPassThroughFilterZ.setInputCloud(filteredCloudPtr);
+                mPassThroughFilterZ.filter(*filteredCloudPtr);
+            }
+            else if (isPassthroughFilterXEnabled_ && isPassthroughFilterZEnabled_)
+            {
+                mPassThroughFilterX.setInputCloud(pCloudPtr);
+                mPassThroughFilterX.filter(*filteredCloudPtr);
+
+                mPassThroughFilterZ.setInputCloud(filteredCloudPtr);
+                mPassThroughFilterZ.filter(*filteredCloudPtr);
+            }
+            else if (isPassthroughFilterXEnabled_)
+            {
+                mPassThroughFilterX.setInputCloud(pCloudPtr);
+                mPassThroughFilterX.filter(*filteredCloudPtr);
+            }
+            else if (isPassthroughFilterYEnabled_)
+            {
+                mPassThroughFilterY.setInputCloud(pCloudPtr);
+                mPassThroughFilterY.filter(*filteredCloudPtr);
+            }
+            else if (isPassthroughFilterZEnabled_)
+            {
+                mPassThroughFilterZ.setInputCloud(pCloudPtr);
+                mPassThroughFilterZ.filter(*filteredCloudPtr);
+            }
+
+            mVoxelGridFilter.setInputCloud(filteredCloudPtr);
+            mVoxelGridFilter.filter(*filteredCloudPtr);
+        }
+        else
+        {
+            mVoxelGridFilter.setInputCloud(pCloudPtr);
+            mVoxelGridFilter.filter(*filteredCloudPtr);
+        }
 
         return filteredCloudPtr;
     }
