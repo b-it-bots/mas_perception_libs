@@ -25,6 +25,7 @@ catkin_python_setup()
 
 generate_dynamic_reconfigure_options(
   ros/config/PlaneFitting.cfg
+  ros/config/ObstacleDetection.cfg
 )
 
 ###################################
@@ -104,6 +105,17 @@ target_link_libraries(cloud_processing_cpp_test
   ${OpenCV_LIBRARIES}
 )
 
+###################################
+# Node for obstacle detection
+add_executable(cloud_obstacle_detection
+  ros/src/cloud_obstacle_detection.cpp
+)
+target_link_libraries(cloud_obstacle_detection
+  ${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
+
 #############
 ## Testing ##
 #############
@@ -153,5 +165,9 @@ install(PROGRAMS
 )
 
 install(TARGETS cloud_processing_cpp_test
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(TARGETS cloud_obstacle_detection
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

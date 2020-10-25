@@ -1,0 +1,15 @@
+# config file loaded during launch as default configurations for the cloud filter, assuming base_link frame for
+# passthrough filter
+passthrough_limit_min_x:  0.0
+passthrough_limit_max_x:  3.0
+passthrough_limit_min_y: -1.5
+passthrough_limit_max_y:  1.5
+passthrough_limit_min_z:  0.025
+passthrough_limit_max_z:  0.2
+voxel_limit_min_z:        0.0
+voxel_limit_max_z:        1.8
+voxel_leaf_size:          0.02
+# config file loaded during launch as default configurations for the clustering algorithm
+cluster_tolerance:       0.03
+min_cluster_size:        5
+max_cluster_size:        1000
