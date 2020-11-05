@@ -116,6 +116,7 @@ private:
     dynamic_reconfigure::Server<ObstacleDetectionConfig> mObstacleDetectionConfigServer;
     ros::Subscriber mCloudSub;
     ros::Publisher mFilteredCloudPub;
+    ros::Publisher mObstacleCloudPub;
     ros::Publisher mMarkerPub;
     tf::TransformListener mTfListener;
     std::string mTargetFrame;
@@ -125,6 +126,7 @@ private:
 public:
     CloudObstacleDetectionNode(const ros::NodeHandle &pNodeHandle, const std::string &pCloudTopic,
             const std::string &pProcessedCloudTopic, 
+            const std::string &pObstacleCloudTopic, 
             const std::string &pTargetFrame, 
             const std::string &pObstaclesDetectionTopic)
     : mNodeHandle(pNodeHandle), mObstacleDetectionConfigServer(mNodeHandle), mTargetFrame(pTargetFrame)
@@ -136,6 +138,7 @@ public:
         ROS_INFO("subscribing to point cloud topic and advertising processed result");
         mCloudSub = mNodeHandle.subscribe(pCloudTopic, 1, &CloudObstacleDetectionNode::cloudCallback, this);
         mFilteredCloudPub = mNodeHandle.advertise<sensor_msgs::PointCloud2>(pProcessedCloudTopic, 1);
+        mObstacleCloudPub = mNodeHandle.advertise<sensor_msgs::PointCloud2>(pObstacleCloudTopic, 1);
         mMarkerPub = mNodeHandle.advertise<visualization_msgs::MarkerArray>(pObstaclesDetectionTopic, 1);
     }
 
@@ -166,7 +169,9 @@ private:
     cloudCallback(const sensor_msgs::PointCloud2::ConstPtr& pCloudMsgPtr)
     {
         // do not process cloud when there's no subscriber
-        if (mFilteredCloudPub.getNumSubscribers() == 0 && mMarkerPub.getNumSubscribers() == 0)
+        if (mFilteredCloudPub.getNumSubscribers() == 0 && 
+            mMarkerPub.getNumSubscribers() == 0 &&
+            mObstacleCloudPub.getNumSubscribers() == 0)
             return;
 
         // transform the cloud to a desired frame
@@ -183,10 +188,11 @@ private:
         pcl::fromROSMsg(*transformedCloudPtr, *pclCloudPtr);
         PointCloud::Ptr filteredCloudPtr = mCloudFilter.filterCloud(pclCloudPtr);
 
-        // publish the filtered cloud for debugging
-        sensor_msgs::PointCloud2::Ptr filteredMsgPtr = boost::make_shared<sensor_msgs::PointCloud2>();
-        pcl::toROSMsg(*filteredCloudPtr, *filteredMsgPtr);
-        mFilteredCloudPub.publish(*filteredMsgPtr);
+        if (mFilteredCloudPub.getNumSubscribers() > 0)
+        {
+            // publish the filtered cloud for debugging
+            publishCloud(filteredCloudPtr, mFilteredCloudPub);
+        }
 
         // Euclidean clustering
         pcl::search::Search<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
@@ -199,7 +205,15 @@ private:
                                       mClusterParams.mMinClusterSize,
                                       mClusterParams.mMaxClusterSize);
 
-        publishClusterMarkers(filteredCloudPtr, cluster_indices);
+        if (mMarkerPub.getNumSubscribers() > 0)
+        {
+            publishClusterMarkers(filteredCloudPtr, cluster_indices);
+        }
+
+        if (mObstacleCloudPub.getNumSubscribers() > 0)
+        {
+            publishObstacleCloud(filteredCloudPtr, cluster_indices);
+        }
     }
 
     void 
@@ -252,6 +266,34 @@ private:
         marker.points.push_back(getGeomPoint(min[0], min[1], min[2]));
         return marker;
     }
+
+    void
+    publishObstacleCloud(PointCloud::ConstPtr filteredCloud, 
+                         const std::vector<pcl::PointIndices>& cluster_indices)
+    {
+        PointCloud::Ptr mergedCloud(new PointCloud);
+        for (const auto& idx: cluster_indices)
+        {
+            for (const auto &index : idx.indices)
+                mergedCloud->push_back ((*filteredCloud)[index]); 
+        }
+        mergedCloud->header = filteredCloud->header;
+        mergedCloud->width = mergedCloud->size ();
+        mergedCloud->height = 1;
+        mergedCloud->is_dense = true;
+
+        // publish the cloud
+        publishCloud(mergedCloud, mObstacleCloudPub);
+    }
+
+    void
+    publishCloud(PointCloud::ConstPtr cloudPtr, const ros::Publisher& publisher)
+    {
+        // publish the cloud
+        sensor_msgs::PointCloud2::Ptr cloudMsgPtr = boost::make_shared<sensor_msgs::PointCloud2>();
+        pcl::toROSMsg(*cloudPtr, *cloudMsgPtr);
+        publisher.publish(*cloudMsgPtr);
+    }
 };
 
 }   // namespace mas_perception_libs
@@ -262,7 +304,7 @@ int main(int pArgc, char** pArgv)
     ros::NodeHandle nh("~");
 
     // load launch parameters
-    std::string cloudTopic, processedCloudTopic, obstacleDetectionsTopic, targetFrame;
+    std::string cloudTopic, processedCloudTopic, obstacleCloudTopic, obstacleDetectionsTopic, targetFrame;
     if (!nh.getParam("cloud_topic", cloudTopic) || cloudTopic.empty())
     {
         ROS_ERROR("No 'cloud_topic' specified as parameter");
@@ -271,6 +313,11 @@ int main(int pArgc, char** pArgv)
     if (!nh.getParam("processed_cloud_topic", processedCloudTopic) || processedCloudTopic.empty())
     {
         ROS_ERROR("No 'processed_cloud_topic' specified as parameter");
+        return EXIT_FAILURE;
+    }
+    if (!nh.getParam("obstacle_cloud_topic", obstacleCloudTopic) || obstacleCloudTopic.empty())
+    {
+        ROS_ERROR("No 'obstacle_cloud_topic' specified as parameter");
         return EXIT_FAILURE;
     }
     if (!nh.getParam("obstacles_detection_topic", obstacleDetectionsTopic) || obstacleDetectionsTopic.empty())
@@ -285,7 +332,7 @@ int main(int pArgc, char** pArgv)
     }
 
     // run cloud filtering and obstacle detection
-    mas_perception_libs::CloudObstacleDetectionNode obstacleDetection(nh, cloudTopic, processedCloudTopic,
+    mas_perception_libs::CloudObstacleDetectionNode obstacleDetection(nh, cloudTopic, processedCloudTopic, obstacleCloudTopic,
                                                                          targetFrame, obstacleDetectionsTopic);
 
     while (ros::ok())
