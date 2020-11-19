@@ -3,7 +3,8 @@
     <arg name="cloud_topic" default=""/>
     <arg name="processed_cloud_topic" default="processed_cloud"/>
     <arg name="obstacle_cloud_topic" default="obstacle_cloud"/>
-    <arg name="target_frame" default="/base_link" />
+    <arg name="transform_target_frame" default="/base_link" />
+    <arg name="cluster_target_frame" default="/base_link" />
     <arg name="obstacles_detection_topic" default="/detected_obstacles"/>
     <arg name="obstacle_detection_config_file"
          default="$(find mas_perception_libs)/ros/config/obstacle_detection_default_configs.yaml" />
@@ -15,7 +16,8 @@
         <param name="processed_cloud_topic" type="string" value="$(arg processed_cloud_topic)" />
         <param name="obstacle_cloud_topic" type="string" value="$(arg obstacle_cloud_topic)" />
         <param name="obstacles_detection_topic" type="string" value="$(arg obstacles_detection_topic)" />
-        <param name="target_frame" type="string" value="$(arg target_frame)" />
+        <param name="transform_target_frame" type="string" value="$(arg transform_target_frame)" />
+        <param name="cluster_target_frame" type="string" value="$(arg cluster_target_frame)" />
     </node>
 
     <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan_node" output="screen"

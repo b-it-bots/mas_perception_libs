@@ -2,7 +2,7 @@
 # passthrough filter
 passthrough_limit_min_x:  0.0
 passthrough_limit_max_x:  1.5
-passthrough_limit_min_y: -1.5
+passthrough_limit_min_y: -0.5
 passthrough_limit_max_y:  1.5
 passthrough_limit_min_z:  0.025
 passthrough_limit_max_z:  0.2
@@ -13,3 +13,8 @@ voxel_leaf_size:          0.02
 cluster_tolerance:       0.03
 min_cluster_size:        5
 max_cluster_size:        1000
+# Obstacle Cache
+obstacle_cache_time:            5
+similarity_threshold:           2.0
+position_history_cache_size:    10
+uniqueness_threshold:           0.005
