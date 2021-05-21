@@ -5,19 +5,20 @@ import numpy as np
 import rospy
 import tf
 from dynamic_reconfigure.server import Server as ParamServer
-from actionlib import SimpleActionServer
+from actionlib import SimpleActionServer, SimpleActionClient
 from cv_bridge import CvBridge
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, Image
 from visualization_msgs.msg import Marker
 from mas_perception_msgs.msg import DetectSceneAction, DetectSceneResult,\
                                     DetectObjectsAction, DetectObjectsResult,\
-                                    PlaneList, Object
+                                    DetectImageObjectsAction, DetectImageObjectsGoal,\
+                                    PlaneList, Object, ImageArray
 from mas_perception_libs.cfg import PlaneFittingConfig
 from .bounding_box import BoundingBox, BoundingBox2D
 from .image_detector import ImageDetectorBase, SingleImageDetectionHandler
 from .utils import PlaneSegmenter, cloud_msg_to_image_msg, transform_cloud_with_listener,\
     get_obj_msg_from_detection
-from .visualization import plane_msg_to_marker
+from .visualization import plane_msg_to_marker, draw_labeled_boxes_img_msg
 
 
 class SceneDetectionActionServer(object):
@@ -75,7 +76,11 @@ class ObjectDetectionActionServer(object):
                                                  execute_cb=self._execute_cb,
                                                  auto_start=False)
         self._timeout_s = timeout_s
+        self._cv_bridge = CvBridge()
         self._initialize(**kwargs)
+
+        self._result_img_pub = rospy.Publisher('/mas_perception/detection_result',
+                                               Image, queue_size=1)
         self._action_server.start()
 
     def _initialize(self, **kwargs):
@@ -91,11 +96,11 @@ class ObjectDetectionActionServer(object):
         if not kwargs_file or not os.path.exists(kwargs_file):
             raise ValueError('invalid value for "kwargs_file": ' + kwargs_file)
 
-        # image detection
-        self._detector_handler = SingleImageDetectionHandler(detection_class,
-                                                             class_annotation_file,
-                                                             kwargs_file,
-                                                             '/mas_perception/detection_result')
+        # # image detection
+        # self._detector_handler = SingleImageDetectionHandler(detection_class,
+        #                                                      class_annotation_file,
+        #                                                      kwargs_file,
+        #                                                      '/mas_perception/detection_result')
 
         self._cloud_topic = kwargs.get('cloud_topic', None)
         if not self._cloud_topic:
@@ -126,11 +131,41 @@ class ObjectDetectionActionServer(object):
         rospy.loginfo('Cloud message received; detecting objects...')
         img_msg = cloud_msg_to_image_msg(cloud_msg)
         original_img_msg = copy.deepcopy(img_msg)
-        try:
-            bounding_boxes, classes, confidences = self._detector_handler.process_image_msg(img_msg)
-        except RuntimeError as e:
-            self._action_server.set_aborted(text=e.message)
+
+        detection_server = SimpleActionClient('/mas_perception/detect_image_objects',
+                                              DetectImageObjectsAction)
+        detection_server.wait_for_server()
+
+        cv_img = self._cv_bridge.imgmsg_to_cv2(img_msg)
+        img_detection_goal = DetectImageObjectsGoal()
+        img_detection_goal.image_array.image = cv_img.flatten().tolist()
+        img_detection_goal.image_array.height = cv_img.shape[0]
+        img_detection_goal.image_array.width = cv_img.shape[1]
+
+        detection_server.send_goal(img_detection_goal)
+        rospy.loginfo('Waiting for detection result...')
+        if detection_server.wait_for_result(rospy.Duration.from_sec(self._timeout_s)):
+            detection_result = detection_server.get_result()
+            classes = detection_result.detections.classes
+            confidences = detection_result.detections.confidences
+            bounding_boxes = []
+            for label, bb_msg in zip(classes, detection_result.detections.bounding_boxes):
+                bb = BoundingBox2D(box_geometry=(bb_msg.min_x, bb_msg.min_y,
+                                                 bb_msg.max_x - bb_msg.min_x,
+                                                 bb_msg.max_y - bb_msg.min_y),
+                                   label=label)
+                bounding_boxes.append(bb)
+        else:
+            error_msg = 'Detection result not received within {0} seconds'.format(self._timeout_s)
+            rospy.loginfo(error_msg)
+            self._action_server.set_aborted(text=error_msg)
             return
+
+        # try:
+        #     bounding_boxes, classes, confidences = self._detector_handler.process_image_msg(img_msg)
+        # except RuntimeError as e:
+        #     self._action_server.set_aborted(text=e.message)
+        #     return
 
         rospy.loginfo('transforming cloud to frame: ' + self._target_frame)
         try:
@@ -139,8 +174,9 @@ class ObjectDetectionActionServer(object):
             self._action_server.set_aborted(text=e.message)
             return
 
-        if self._filtered_cloud_pub.get_num_connections() > 0:
-            self._filtered_cloud_pub.publish(filtered_cloud)
+        rospy.loginfo('publishing image with detection results')
+        detection_result = draw_labeled_boxes_img_msg(self._cv_bridge, img_msg, bounding_boxes)
+        self._result_img_pub.publish(detection_result)
 
         rospy.loginfo('creating action result and setting success')
         result = ObjectDetectionActionServer._get_action_result(transformed_cloud_msg, bounding_boxes,
@@ -186,6 +222,10 @@ class PlaneDetectionActionServer(SceneDetectionActionServer):
     def __init__(self, action_name, **kwargs):
         super(PlaneDetectionActionServer, self).__init__(action_name, **kwargs)
 
+        self._cv_bridge = CvBridge()
+        self._result_img_pub = rospy.Publisher('/mas_perception/detection_result',
+                                               Image, queue_size=1)
+
     def _initialize(self, **kwargs):
         detection_class = kwargs.get('detection_class', None)
         if not issubclass(detection_class, ImageDetectorBase):
@@ -203,9 +243,9 @@ class PlaneDetectionActionServer(SceneDetectionActionServer):
         self._plane_segmenter = PlaneSegmenter()
         self._plane_fitting_param_server = ParamServer(PlaneFittingConfig, self._plane_fitting_config_cb)
 
-        # image detection
-        self._detector_handler = SingleImageDetectionHandler(detection_class, class_annotation_file, kwargs_file,
-                                                             '/mas_perception/detection_result')
+        # # image detection
+        # self._detector_handler = SingleImageDetectionHandler(detection_class, class_annotation_file, kwargs_file,
+        #                                                      '/mas_perception/detection_result')
 
         self._cloud_topic = kwargs.get('cloud_topic', None)
         if not self._cloud_topic:
@@ -234,11 +274,41 @@ class PlaneDetectionActionServer(SceneDetectionActionServer):
 
         rospy.loginfo('detecting objects')
         img_msg = cloud_msg_to_image_msg(cloud_msg)
-        try:
-            bounding_boxes, classes, confidences = self._detector_handler.process_image_msg(img_msg)
-        except RuntimeError as e:
-            self._action_server.set_aborted(text=e.message)
+
+        detection_server = SimpleActionClient('/mas_perception/detect_image_objects',
+                                              DetectImageObjectsAction)
+        detection_server.wait_for_server()
+
+        cv_img = self._cv_bridge.imgmsg_to_cv2(img_msg)
+        img_detection_goal = DetectImageObjectsGoal()
+        img_detection_goal.image_array.image = cv_img.flatten().tolist()
+        img_detection_goal.image_array.height = cv_img.shape[0]
+        img_detection_goal.image_array.width = cv_img.shape[1]
+
+        detection_server.send_goal(img_detection_goal)
+        rospy.loginfo('Waiting for detection result...')
+        if detection_server.wait_for_result(rospy.Duration.from_sec(self._timeout)):
+            detection_result = detection_server.get_result()
+            classes = detection_result.detections.classes
+            confidences = detection_result.detections.confidences
+            bounding_boxes = []
+            for label, bb_msg in zip(classes, detection_result.detections.bounding_boxes):
+                bb = BoundingBox2D(box_geometry=(bb_msg.min_x, bb_msg.min_y,
+                                                 bb_msg.max_x - bb_msg.min_x,
+                                                 bb_msg.max_y - bb_msg.min_y),
+                                   label=label)
+                bounding_boxes.append(bb)
+        else:
+            error_msg = 'Detection result not received within {0} seconds'.format(self._timeout)
+            rospy.loginfo(error_msg)
+            self._action_server.set_aborted(text=error_msg)
             return
+
+        # try:
+        #     bounding_boxes, classes, confidences = self._detector_handler.process_image_msg(img_msg)
+        # except RuntimeError as e:
+        #     self._action_server.set_aborted(text=e.message)
+        #     return
 
         rospy.loginfo('transforming cloud to frame: ' + self._target_frame)
         try:
@@ -261,6 +331,10 @@ class PlaneDetectionActionServer(SceneDetectionActionServer):
         if self._plane_marker_pub.get_num_connections() > 0 and len(plane_list.planes) > 0:
             marker = plane_msg_to_marker(plane_list.planes[0], 'plane_convex')
             self._plane_marker_pub.publish(marker)
+
+        rospy.loginfo('publishing image with detection results')
+        detection_result = draw_labeled_boxes_img_msg(self._cv_bridge, img_msg, bounding_boxes)
+        self._result_img_pub.publish(detection_result)
 
         rospy.loginfo('creating action result and setting success')
         result = PlaneDetectionActionServer._get_action_result(transformed_cloud_msg, plane_list, bounding_boxes,
