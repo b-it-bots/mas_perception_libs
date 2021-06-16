@@ -161,7 +161,8 @@ class TorchImageDetector(ImageDetectorBase):
                 self._model = detector_instantiator(len(self._classes.keys()))
 
                 rospy.loginfo('[load_model] Loading model parameters from %s', model_path)
-                self._model.load_state_dict(torch.load(model_path, map_location=self._eval_device))
+                checkpoint = torch.load(model_path, map_location=self._eval_device)
+                self._model.load_state_dict(checkpoint['model'])
                 rospy.loginfo('[load_model] Successfully loaded model')
 
             self._model.eval()
