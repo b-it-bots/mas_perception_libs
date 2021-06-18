@@ -136,6 +136,8 @@ class TorchImageDetector(ImageDetectorBase):
 
     def load_model(self, **kwargs):
         import torch
+        rospy.loginfo('PyTorch version: %s', torch.__version__)
+        rospy.loginfo('CUDA available: %s', torch.cuda.is_available())
 
         detector_module = kwargs.get('detector_module', None)
         detector_instantiator = kwargs.get('detector_instantiator', None)
