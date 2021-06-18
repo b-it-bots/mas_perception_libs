@@ -3,7 +3,7 @@
     <arg name="action_name" default="/mas_perception/detect_objects"/>
     <arg name="cloud_topic" default="/hsrb/head_rgbd_sensor/depth_registered/rectified_points" />
     <arg name="target_frame" default="/base_link" />
-    <arg name="class_annotations" default="$(find mas_models)/perception_models/detectors/ycb/ycb_robocup2021.yaml" />
+    <arg name="class_annotations" default="$(find perception_models)/detectors/ycb/ycb_robocup2021.yaml" />
     <arg name="kwargs_file" default="$(find mas_perception_libs)/models/ycb_detection_kwargs_robocup2021.yml" />
     <arg name="detection_module" default="mas_perception_libs" />
     <arg name="detection_class" default="TorchImageDetector" />
