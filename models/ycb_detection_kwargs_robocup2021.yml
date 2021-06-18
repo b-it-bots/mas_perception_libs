@@ -1,0 +1,4 @@
+detector_module: dataset_interface.object_detection.utils                       
+detector_instantiator: get_model                                                
+detection_threshold: 0.7
+model_path: /workspace/src/mas_models/perception_models/detectors/ycb/ycb_robocup2021.pt

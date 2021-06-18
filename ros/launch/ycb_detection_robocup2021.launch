@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="action_name" default="/mas_perception/detect_objects"/>
+    <arg name="cloud_topic" default="/hsrb/head_rgbd_sensor/depth_registered/rectified_points" />
+    <arg name="target_frame" default="/base_link" />
+    <arg name="class_annotations" default="$(find mas_models)/perception_models/detectors/ycb/ycb_robocup2021.yaml" />
+    <arg name="kwargs_file" default="$(find mas_perception_libs)/models/ycb_detection_kwargs_robocup2021.yml" />
+    <arg name="detection_module" default="mas_perception_libs" />
+    <arg name="detection_class" default="TorchImageDetector" />
+    <arg name="detection_action_name" default="detect_objects_server" />
+
+    <node pkg="mas_perception_libs" type="py3_object_detector" name="img_object_detection_server" output="screen">
+        <param name="detection_action_name" type="string" value="/mas_perception/detect_image_objects" />
+        <param name="class_annotations" type="string" value="$(arg class_annotations)" />
+        <param name="kwargs_file" type="string" value="$(arg kwargs_file)" />
+    </node>
+
+    <node pkg="mas_perception_libs" type="object_detection_action_server" name="object_detection_server" output="screen">
+        <param name="action_name" type="string" value="$(arg action_name)" />
+        <param name="cloud_topic" type="string" value="$(arg cloud_topic)" />
+        <param name="target_frame" type="string" value="$(arg target_frame)" />
+        <param name="class_annotations" type="string" value="$(arg class_annotations)" />
+        <param name="kwargs_file" type="string" value="$(arg kwargs_file)" />
+        <param name="detection_module" type="string" value="$(arg detection_module)" />
+        <param name="detection_class" type="string" value="$(arg detection_class)" />
+    </node>
+</launch>
